@@ -19,7 +19,9 @@ pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
 
-add_executable(telemetria_tx telemetria_tx.c )
+add_executable(telemetria_tx telemetria_tx.c mpu9250.c)
+
+add_subdirectory(lib/pico-nrf24/lib/nrf24l01)
 
 pico_set_program_name(telemetria_tx "telemetria_tx")
 pico_set_program_version(telemetria_tx "0.1")
@@ -28,7 +30,7 @@ pico_enable_stdio_uart(telemetria_tx 0)
 pico_enable_stdio_usb(telemetria_tx 1)
 
 # Add the standard library to the build
-target_link_libraries(telemetria_tx pico_stdlib)
+target_link_libraries(telemetria_tx pico_stdlib nrf24_driver)
 
 pico_add_extra_outputs(telemetria_tx)
 
