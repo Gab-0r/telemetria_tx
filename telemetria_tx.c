@@ -1,14 +1,229 @@
 #include <stdio.h>
 #include "pico/stdlib.h"
 #include "nrf24_driver.h"
-#include "macros.h"
 #include "mpu9250.h"
+
+int16_t acceleration[3], gyro[3], gyroCal[3], eulerAngles[2], fullAngles[2], magnet[3];
+absolute_time_t timeOfLastCheck;
+
+void init_mpu9250(int loop);
+void updateAngles();
+void printData();
+
+char str[100];
+
+const uint8_t pipezero_addr[5] = {0x37,0x37,0x37,0x37,0x37};
+const uint8_t pipeone_addr[5] = {0xC7,0xC7,0xC7,0xC7,0xC7};
+const uint8_t pipetwo_addr[5] = {0xC8,0xC7,0xC7,0xC7,0xC7};
 
 int main()
 {
     stdio_init_all();
+    sleep_ms(3000);
 
-    puts("Hello, world!");
+    pin_manager_t pins_rf = { 
+        .copi = 3,
+        .cipo = 4, 
+        .sck = 2,
+        .csn = 5, 
+        .ce = 6 
+    };
 
-    return 0;
+    nrf_manager_t my_config = {
+        // AW_3_BYTES, AW_4_BYTES, AW_5_BYTES
+        .address_width = AW_5_BYTES,
+        // dynamic payloads: DYNPD_ENABLE, DYNPD_DISABLE
+        .dyn_payloads = DYNPD_ENABLE,
+        // retransmission delay: ARD_250US, ARD_500US, ARD_750US, ARD_1000US
+        .retr_delay = ARD_500US,
+        // retransmission count: ARC_NONE...ARC_15RT
+        .retr_count = ARC_10RT,
+        // data rate: RF_DR_250KBPS, RF_DR_1MBPS, RF_DR_2MBPS
+        .data_rate = RF_DR_1MBPS,
+        // RF_PWR_NEG_18DBM, RF_PWR_NEG_12DBM, RF_PWR_NEG_6DBM, RF_PWR_0DBM
+        .power = RF_PWR_NEG_12DBM,
+        // RF Channel 
+        .channel = 120,
+    };
+
+    // SPI baudrate
+     uint32_t my_baudrate = 5000000;
+
+    nrf_client_t my_nrf;
+
+    // initialise my_nrf
+    nrf_driver_create_client(&my_nrf);
+
+    // configure GPIO pins and SPI
+    my_nrf.configure(&pins_rf, my_baudrate);
+
+    // not using default configuration (my_nrf.initialise(NULL)) 
+    my_nrf.initialise(&my_config);
+
+
+    //set to Standby-I Mode
+    my_nrf.standby_mode();
+
+    // payload sent to receiver data pipe 0
+    //Estructura de datos para enviar los datos de la IMU
+    typedef struct payload_zero_s {
+        uint8_t tagAcel;
+        int16_t acelX;
+        int16_t acelY;
+        int16_t acelZ;
+        uint8_t tagGyro;
+        int16_t gyroX;
+        int16_t gyroY;
+        int16_t gyroZ;
+        uint8_t tagMag;
+        int16_t magX;
+        int16_t magY;
+        int16_t magZ;
+    } payload_zero_t;
+
+    // payload sent to receiver data pipe 1
+    typedef struct payload_one_s {
+        uint8_t tagSpeed;
+        int16_t windSpeed;
+        uint8_t tagDir;
+        int16_t windDir; 
+    } payload_one_t;
+
+    typedef struct payload_two_s { uint8_t one; uint8_t two; } payload_two_t;
+
+    payload_zero_t payload_zero = {
+    .tagAcel = 0xFF,
+    .acelX = 0x21CD,
+    .acelY = 0x22CD,
+    .acelZ = 0x23CD,
+    .tagGyro = 0xFE,
+    .gyroX = 0x24CD,
+    .gyroY = 0x25CD,
+    .gyroZ = 0x26CD,
+    .tagMag = 0xFD,
+    .magX = 0x27CD,
+    .magY = 0x28CD,
+    .magZ = 0x29CD
+    };
+
+    payload_one_t payload_one = {
+        .tagSpeed = 0xEF,
+        .windSpeed = 0x0F,
+        .tagDir = 0xEE,
+        .windDir = 0x0E
+    };
+
+    // payload sent to receiver data pipe 2
+    payload_two_t payload_two = { .one = 123, .two = 213 };
+
+    // result of packet transmission
+    fn_status_t success;
+
+    uint64_t time_sent = 0; // time packet was sent
+    uint64_t time_reply = 0; // response time after packet sent
+
+    init_mpu9250(100);
+
+    while(1){
+        updateAngles();
+        printData();
+
+        //send to receiver's DATA_PIPE_0 address
+        my_nrf.tx_destination(pipezero_addr);
+
+        // time packet was sent
+        time_sent = to_us_since_boot(get_absolute_time()); // time sent
+
+        // send packet to receiver's DATA_PIPE_0 address
+        success = my_nrf.send_packet(&payload_zero, sizeof(payload_zero));
+
+        // time auto-acknowledge was received
+        time_reply = to_us_since_boot(get_absolute_time()); // response time
+
+        if (success)
+        {
+        printf("\nPacket sent:- Response: %lluμS | Payload: %d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",time_reply - time_sent, 
+        payload_zero.tagAcel, payload_zero.acelX, payload_zero.acelY, payload_zero.acelZ, payload_zero.tagGyro, payload_zero.gyroX, payload_zero.gyroY, payload_zero.gyroZ,
+        payload_zero.tagMag, payload_zero.magX, payload_zero.magY, payload_zero.magZ);
+
+        } else {
+
+        printf("\nPacket not sent:- Receiver not available.\n");
+        }
+
+        sleep_ms(70);
+
+        // send to receiver's DATA_PIPE_1 address
+        my_nrf.tx_destination(pipeone_addr);
+
+        // time packet was sent
+        time_sent = to_us_since_boot(get_absolute_time()); // time sent
+
+        // send packet to receiver's DATA_PIPE_1 address
+        success = my_nrf.send_packet(&payload_one, sizeof(payload_one));
+        
+        // time auto-acknowledge was received
+        time_reply = to_us_since_boot(get_absolute_time()); // response time
+
+        if (success)
+        {
+        printf("\nPacket sent:- Response: %lluμS | Payload: %d,%d,%d,%d\n", time_reply - time_sent, payload_one.tagSpeed, payload_one.windSpeed, payload_one.windDir, payload_one.windSpeed);
+
+        } else {
+
+        printf("\nPacket not sent:- Receiver not available.\n");
+        }
+
+        sleep_ms(70);
+
+        // send to receiver's DATA_PIPE_2 address
+        my_nrf.tx_destination(pipetwo_addr);
+
+        // time packet was sent
+        time_sent = to_us_since_boot(get_absolute_time()); // time sent
+
+        // send packet to receiver's DATA_PIPE_2 address
+        success = my_nrf.send_packet(&payload_two, sizeof(payload_two));
+        
+        // time auto-acknowledge was received
+        time_reply = to_us_since_boot(get_absolute_time()); // response time
+
+        if (success)
+        {
+        printf("\nPacket sent:- Response: %lluμS | Payload: %d & %d\n",time_reply - time_sent, payload_two.one, payload_two.two);
+
+        } else {
+
+        printf("\nPacket not sent:- Receiver not available.\n");
+        }
+
+        sleep_ms(70);
+    }
+}
+
+void init_mpu9250(int loop){
+    start_spi();
+    calibrate_gyro(gyroCal, loop);
+    mpu9250_read_raw_accel(acceleration);
+    calculate_angles_from_accel(eulerAngles, acceleration);
+    timeOfLastCheck = get_absolute_time();
+}
+
+void updateAngles(){
+    mpu9250_read_raw_accel(acceleration);
+    mpu9250_read_raw_gyro(gyro);
+    mpu9250_read_raw_magneto(magnet);
+    gyro[0] -= gyroCal[0];
+    gyro[1] -= gyroCal[1];
+    gyro[2] -= gyroCal[2];
+    calculate_angles(eulerAngles, acceleration, gyro, absolute_time_diff_us(timeOfLastCheck, get_absolute_time()));
+    timeOfLastCheck = get_absolute_time();
+    convert_to_full(eulerAngles, acceleration, fullAngles);
+}
+
+void printData(){
+    //printf("%d,%d,%d\n", magnet[0], magnet[1], magnet[2]); //Acelerometro XYZ
+    //printf("%d,%d,%d\n", gyro[0] - gyroCal[0], gyro[1] - gyroCal[1], gyro[2] - gyroCal[2]);//Giroscopio
+    //printf("Euler. Roll = %d, Pitch = %d\n", eulerAngles[0], eulerAngles[1]);
+    printf( "%d,%d\n", fullAngles[0], fullAngles[1]);
 }
