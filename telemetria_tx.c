@@ -91,31 +91,6 @@ int main()
 
     typedef struct payload_two_s { uint8_t one; uint8_t two; } payload_two_t;
 
-    payload_zero_t payload_zero = {
-    .tagAcel = 0xFF,
-    .acelX = 0x21CD,
-    .acelY = 0x22CD,
-    .acelZ = 0x23CD,
-    .tagGyro = 0xFE,
-    .gyroX = 0x24CD,
-    .gyroY = 0x25CD,
-    .gyroZ = 0x26CD,
-    .tagMag = 0xFD,
-    .magX = 0x27CD,
-    .magY = 0x28CD,
-    .magZ = 0x29CD
-    };
-
-    payload_one_t payload_one = {
-        .tagSpeed = 0xEF,
-        .windSpeed = 0x0F,
-        .tagDir = 0xEE,
-        .windDir = 0x0E
-    };
-
-    // payload sent to receiver data pipe 2
-    payload_two_t payload_two = { .one = 123, .two = 213 };
-
     // result of packet transmission
     fn_status_t success;
 
@@ -127,6 +102,31 @@ int main()
     while(1){
         updateAngles();
         printData();
+
+        payload_zero_t payload_zero = {
+            .tagAcel = 0xFF,
+            .acelX = acceleration[0],
+            .acelY = acceleration[1],
+            .acelZ = acceleration[2],
+            .tagGyro = 0xFE,
+            .gyroX = gyro[0] - gyroCal[0],
+            .gyroY = gyro[1] - gyroCal[1],
+            .gyroZ = gyro[2] - gyroCal[2],
+            .tagMag = 0xFD,
+            .magX = magnet[0],
+            .magY = magnet[1],
+            .magZ = magnet[2]
+        };
+
+        payload_one_t payload_one = {
+            .tagSpeed = 0xEF,
+            .windSpeed = 0x0F,
+            .tagDir = 0xEE,
+            .windDir = 0x0E
+        };
+
+        // payload sent to receiver data pipe 2
+        payload_two_t payload_two = { .one = 123, .two = 213 };
 
         //send to receiver's DATA_PIPE_0 address
         my_nrf.tx_destination(pipezero_addr);
@@ -151,7 +151,7 @@ int main()
         printf("\nPacket not sent:- Receiver not available.\n");
         }
 
-        sleep_ms(70);
+        sleep_ms(100);
 
         // send to receiver's DATA_PIPE_1 address
         my_nrf.tx_destination(pipeone_addr);
@@ -174,7 +174,7 @@ int main()
         printf("\nPacket not sent:- Receiver not available.\n");
         }
 
-        sleep_ms(70);
+        sleep_ms(100);
 
         // send to receiver's DATA_PIPE_2 address
         my_nrf.tx_destination(pipetwo_addr);
@@ -197,7 +197,7 @@ int main()
         printf("\nPacket not sent:- Receiver not available.\n");
         }
 
-        sleep_ms(70);
+        sleep_ms(100);
     }
 }
 
@@ -222,8 +222,9 @@ void updateAngles(){
 }
 
 void printData(){
-    //printf("%d,%d,%d\n", magnet[0], magnet[1], magnet[2]); //Acelerometro XYZ
-    //printf("%d,%d,%d\n", gyro[0] - gyroCal[0], gyro[1] - gyroCal[1], gyro[2] - gyroCal[2]);//Giroscopio
+    printf("%d,%d,%d\n", acceleration[0], acceleration[1], acceleration[2]); //Acelerometro XYZ
+    printf("%d,%d,%d\n", gyro[0] - gyroCal[0], gyro[1] - gyroCal[1], gyro[2] - gyroCal[2]);//Giroscopio
+    printf("%d,%d,%d", magnet[0], magnet[1], magnet[2]);
     //printf("Euler. Roll = %d, Pitch = %d\n", eulerAngles[0], eulerAngles[1]);
-    printf( "%d,%d\n", fullAngles[0], fullAngles[1]);
+    //printf( "%d,%d\n", fullAngles[0], fullAngles[1]);
 }
