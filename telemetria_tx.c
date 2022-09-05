@@ -8,7 +8,7 @@ absolute_time_t timeOfLastCheck;
 
 void init_mpu9250(int loop);
 void updateAngles();
-void printData();
+void printDataImu();
 
 char str[100];
 
@@ -83,13 +83,11 @@ int main()
 
     // payload sent to receiver data pipe 1
     typedef struct payload_one_s {
-        uint8_t tagSpeed;
         int16_t windSpeed;
-        uint8_t tagDir;
         int16_t windDir; 
     } payload_one_t;
 
-    typedef struct payload_two_s { uint8_t one; uint8_t two; } payload_two_t;
+    typedef struct payload_two_s { int16_t angle1; int16_t angle2; } payload_two_t;
 
     // result of packet transmission
     fn_status_t success;
@@ -101,32 +99,27 @@ int main()
 
     while(1){
         updateAngles();
-        printData();
+        printDataImu();
 
         payload_zero_t payload_zero = {
-            .tagAcel = 0xFF,
             .acelX = acceleration[0],
             .acelY = acceleration[1],
             .acelZ = acceleration[2],
-            .tagGyro = 0xFE,
             .gyroX = gyro[0] - gyroCal[0],
             .gyroY = gyro[1] - gyroCal[1],
             .gyroZ = gyro[2] - gyroCal[2],
-            .tagMag = 0xFD,
             .magX = magnet[0],
             .magY = magnet[1],
             .magZ = magnet[2]
         };
 
         payload_one_t payload_one = {
-            .tagSpeed = 0xEF,
             .windSpeed = 0x0F,
-            .tagDir = 0xEE,
             .windDir = 0x0E
         };
 
         // payload sent to receiver data pipe 2
-        payload_two_t payload_two = { .one = 123, .two = 213 };
+        payload_two_t payload_two = { .angle1 = fullAngles[0], .angle2 = fullAngles[1] };
 
         //send to receiver's DATA_PIPE_0 address
         my_nrf.tx_destination(pipezero_addr);
@@ -142,9 +135,9 @@ int main()
 
         if (success)
         {
-        printf("\nPacket sent:- Response: %lluμS | Payload: %d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",time_reply - time_sent, 
-        payload_zero.tagAcel, payload_zero.acelX, payload_zero.acelY, payload_zero.acelZ, payload_zero.tagGyro, payload_zero.gyroX, payload_zero.gyroY, payload_zero.gyroZ,
-        payload_zero.tagMag, payload_zero.magX, payload_zero.magY, payload_zero.magZ);
+        printf("\nPacket sent:- Response: %lluμS | Payload: %d,%d,%d,%d,%d,%d,%d,%d,%d\n",time_reply - time_sent, 
+        payload_zero.acelX, payload_zero.acelY, payload_zero.acelZ, payload_zero.gyroX, payload_zero.gyroY, payload_zero.gyroZ,
+        payload_zero.magX, payload_zero.magY, payload_zero.magZ);
 
         } else {
 
@@ -167,7 +160,7 @@ int main()
 
         if (success)
         {
-        printf("\nPacket sent:- Response: %lluμS | Payload: %d,%d,%d,%d\n", time_reply - time_sent, payload_one.tagSpeed, payload_one.windSpeed, payload_one.windDir, payload_one.windSpeed);
+        printf("\nPacket sent:- Response: %lluμS | Payload: %d,%d,%d,%d\n", time_reply - time_sent, payload_one.windSpeed, payload_one.windDir);
 
         } else {
 
@@ -190,7 +183,7 @@ int main()
 
         if (success)
         {
-        printf("\nPacket sent:- Response: %lluμS | Payload: %d & %d\n",time_reply - time_sent, payload_two.one, payload_two.two);
+        printf("\nPacket sent:- Response: %lluμS | Payload: %d & %d\n",time_reply - time_sent, payload_two.angle1, payload_two.angle2);
 
         } else {
 
@@ -221,10 +214,10 @@ void updateAngles(){
     convert_to_full(eulerAngles, acceleration, fullAngles);
 }
 
-void printData(){
+void printDataImu(){
     printf("%d,%d,%d\n", acceleration[0], acceleration[1], acceleration[2]); //Acelerometro XYZ
     printf("%d,%d,%d\n", gyro[0] - gyroCal[0], gyro[1] - gyroCal[1], gyro[2] - gyroCal[2]);//Giroscopio
-    printf("%d,%d,%d", magnet[0], magnet[1], magnet[2]);
+    printf("%d,%d,%d\n", magnet[0], magnet[1], magnet[2]);
     //printf("Euler. Roll = %d, Pitch = %d\n", eulerAngles[0], eulerAngles[1]);
     //printf( "%d,%d\n", fullAngles[0], fullAngles[1]);
 }
