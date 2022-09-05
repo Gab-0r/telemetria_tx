@@ -17,11 +17,11 @@ absolute_time_t timeOfLastCheck;
 const uint interruptPin = 16;
 uint count_holes = 0;
 uint count_steps = 0;
-const uint holes = 72; //Agujeros del encoder
+const uint holes = 20; //Agujeros del encoder
 repeating_timer_t timer;
 float radSeg = 0;
 float windSpeed = 0;
-float radio = 0.09;
+float radio = 0.08;
 
 //Variables dirección del viento
 const int direccionPin = 28;
