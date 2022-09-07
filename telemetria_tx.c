@@ -289,7 +289,7 @@ bool everySecond(){
 
 void getSpeed(){
     radSeg = ((count_holes * 60) / holes)*2*PI/60;
-    windSpeed = radSeg * radio;
+    windSpeed = radSeg * radio * 100; //[cm/s]
     printf("Velocidad: %f \n", windSpeed);
     count_holes = 0;
 }
